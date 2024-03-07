@@ -1,5 +1,5 @@
 [project]
-name = "dolphin-disc-drive
+name = "dolphin-disc-drive"
 version = "0.0.1"
 authors = [
   { name="Mike Petrella", email="rotobash@gmail.com" },
