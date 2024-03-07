@@ -1,0 +1,25 @@
+[project]
+name = "dolphin-disc-drive
+version = "0.0.1"
+authors = [
+  { name="Mike Petrella", email="rotobash@gmail.com" },
+]
+description = "A set of tools to work with Gamecube disc filesystems."
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/rotobash/dolphin-disc-drive"
+Issues = "https://github.com/rotobash/dolphin-disc-drive/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
