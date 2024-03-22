@@ -168,11 +168,11 @@ class TableOfContents(AbstractFile):
         """
         fst_file_list: "list[FSTFile]" = self.get_fst_file_list()
         fst_file_list.sort(key=lambda fst: fst.data_offset)
-        data_offset = fst_file_list[0].data_offset
+        data_offset = start_offset if start_offset > 0 else fst_file_list[0].data_offset
 
         for entry in fst_file_list:
             entry.data_offset = data_offset
-            data_offset += entry.data_size
+            data_offset += entry.data_size + Stream.align_bytes(entry.data_size)
 
     def get_fst_list(self, start_directory: FSTDirectory = None) -> "list[FSTEntry]":
         """

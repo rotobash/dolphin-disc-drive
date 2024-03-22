@@ -68,7 +68,7 @@ class GamecubeImageReader:
     def extract_file(self, file: FSTFile) -> AbstractFile:
         if file is not None:
             stream = MemoryStream(
-                self.image_stream.read_bytes(file.data_offset, file.data_size)
+                self.image_stream.read_bytes(file.old_offset, file.old_size)
             )
         else:
             stream = MemoryStream(bytearray())
@@ -104,7 +104,9 @@ class GamecubeImageReader:
         return image_size + Stream.align_bytes(image_size)
 
     def get_image_size(self):
-        return self.get_system_size() + self.table_of_contents.get_game_file_size()
+        fst_list = self.table_of_contents.get_fst_file_list()
+        fst_list.sort(key=lambda f: f.data_offset)
+        return fst_list[-1].data_offset + fst_list[-1].data_size
 
     def build_image(self, write_stream: Stream):
 
