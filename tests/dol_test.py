@@ -1,5 +1,5 @@
 import unittest
-from typing import Literal
+from typing_extensions import Literal
 from src.definitions.files.system import DOL, DOLSection
 from src.definitions import MemoryStream
 from .constants import PATH_TO_TEST_SYSTEM_FILES
