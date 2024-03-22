@@ -1,7 +1,7 @@
 import abc
 
 from mmap import mmap
-from typing_extensions import Self
+from typing import Self
 from .unicode import UnicodeString, UnicodeCharacter
 
 
