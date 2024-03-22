@@ -1,12 +1,13 @@
 import abc
-from ..serializable_file import SerializableFile, EncodableFile
-from ...unicode import UnicodeString
+
+from . import Serializable, Encodable
+from .unicode import UnicodeString
 
 
-class FSTEntry(SerializableFile, EncodableFile, abc.ABC):
-    def __init__(self, name_offset: int, file_entry_index: int) -> None:
+class FSTEntry(Serializable, Encodable, abc.ABC):
+    def __init__(self, index: int, name_offset: int) -> None:
+        self.file_entry = index
         self.name_offset = name_offset
-        self.file_entry = file_entry_index
         self.filename = None
 
     def set_name(self, filename: UnicodeString):
@@ -14,17 +15,14 @@ class FSTEntry(SerializableFile, EncodableFile, abc.ABC):
 
     def to_json_obj(self) -> dict:
         return {
-            "file_entry_index": self.file_entry,
             "name_offset": self.name_offset,
             "filename": str(self.filename),
         }
 
 
 class FSTFile(FSTEntry):
-    def __init__(
-        self, name_offset: int, file_entry_index: int, offset: int, size: int
-    ) -> None:
-        super().__init__(name_offset, file_entry_index)
+    def __init__(self, index: int, name_offset: int, offset: int, size: int) -> None:
+        super().__init__(index, name_offset)
         self.data_offset = offset
         self.data_size = size
 
@@ -47,9 +45,9 @@ class FSTFile(FSTEntry):
     def to_bytes(self) -> bytearray:
         file_entry = (
             [0]
-            + self.name_offset.to_bytes(3, "big")
-            + self.data_offset.to_bytes(4, "big")
-            + self.data_size.to_bytes(4, "big")
+            + list(self.name_offset.to_bytes(3, "big", signed=False))
+            + list(self.data_offset.to_bytes(4, "big", signed=False))
+            + list(self.data_size.to_bytes(4, "big", signed=False))
         )
         return bytearray(file_entry)
 
@@ -57,15 +55,18 @@ class FSTFile(FSTEntry):
 class FSTDirectory(FSTEntry):
     def __init__(
         self,
+        index: int,
         name_offset: int,
-        file_entry_index: int,
         parent_entry: int,
         next_offset: int,
     ) -> None:
-        super().__init__(name_offset, file_entry_index)
+        super().__init__(index, name_offset)
         self.parent_entry = parent_entry
         self.next_offset = next_offset
         self._children: "list[FSTEntry]" = []
+
+    def get_file_entries(self):
+        return self._children
 
     def add_child(self, entry: FSTEntry):
         self._children.append(entry)
@@ -83,11 +84,14 @@ class FSTDirectory(FSTEntry):
                 return child
         return None
 
-    def add_file(self, file_entry: FSTEntry):
-        pass
-
-    def remove_file(self, file_entry: FSTEntry):
-        pass
+    def __len__(self):
+        count = 1
+        for child in self._children:
+            if isinstance(child, FSTDirectory):
+                count += len(child)
+            else:
+                count += 1
+        return count
 
     def to_json_obj(self) -> dict:
         return (
@@ -104,15 +108,14 @@ class FSTDirectory(FSTEntry):
 
     def to_bytes(self) -> bytearray:
         dir_entry = (
-            [0]
-            + self.name_offset.to_bytes(3, "big")
-            + self.parent_entry.to_bytes(4, "big")
-            + self.next_offset.to_bytes(4, "big")
+            [1]
+            + list(self.name_offset.to_bytes(3, "big", signed=False))
+            + list(self.parent_entry.to_bytes(4, "big", signed=False))
+            + list(self.next_offset.to_bytes(4, "big", signed=False))
         )
         return bytearray(dir_entry)
 
 
 class FSTRootDirectory(FSTDirectory):
-    def __init__(self, num_entries: int) -> None:
-        super().__init__(0, 0, 0, num_entries)
-        self.num_entries = num_entries
+    def __init__(self, number_of_entries: int) -> None:
+        super().__init__(1, 0, 0, number_of_entries)

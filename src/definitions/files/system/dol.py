@@ -1,12 +1,7 @@
-from .. import (
-    SerializableFile,
-    EncodableFile,
-    Stream,
-    MemoryStream
-)
+from ... import AbstractFile, Serializable, Stream, MemoryStream
 
 
-class DOLSection(SerializableFile):
+class DOLSection(Serializable):
     def __init__(
         self, section_number: int, offset: int, load_address: int, size: int
     ) -> None:
@@ -47,11 +42,15 @@ BSSSizeOffset = 0xDC
 EntryPointOffset = 0xE0
 
 
-class DOL(SerializableFile, EncodableFile):
-    def __init__(
-        self, header_bytes: Stream
-    ) -> None:
+class DOL(AbstractFile):
+    """
+    A DOL is an executable file used by the Gamecube.
+    The app loader that executes when a disc is booted loads main.dol into memory given
+    the offsets and jumps to the entry point stated by the DOL.
+    """
 
+    def __init__(self, header_bytes: Stream) -> None:
+        super().__init__("main.dol", header_bytes)
         self.text_sections: "list[DOLTextSection]" = []
         self.data_sections: "list[DOLDataSection]" = []
 
@@ -61,14 +60,18 @@ class DOL(SerializableFile, EncodableFile):
 
         for i in range(7):
             offset = header_bytes.get_int_at_offset(TextSectionStartOffset + (i * 4))
-            load_address = header_bytes.get_int_at_offset(TextAddressStartOffset + (i * 4))
+            load_address = header_bytes.get_int_at_offset(
+                TextAddressStartOffset + (i * 4)
+            )
             size = header_bytes.get_int_at_offset(TextSizeStartOffset + (i * 4))
             section = DOLTextSection(i, offset, load_address, size)
             self.text_sections.append(section)
 
         for i in range(11):
             offset = header_bytes.get_int_at_offset(DataSectionStartOffset + (i * 4))
-            load_address = header_bytes.get_int_at_offset(DataAddressStartOffset + (i * 4))
+            load_address = header_bytes.get_int_at_offset(
+                DataAddressStartOffset + (i * 4)
+            )
             size = header_bytes.get_int_at_offset(DataSizeStartOffset + (i * 4))
             section = DOLDataSection(i, offset, load_address, size)
             self.data_sections.append(section)
@@ -103,19 +106,27 @@ class DOL(SerializableFile, EncodableFile):
             "entry_point": self.entry_point.to_bytes(4, "big").hex(),
         }
 
-    def to_bytes(self) -> Stream:
+    def to_bytes(self) -> bytearray:
         dol_file = MemoryStream(bytearray([0] * self.get_dol_size()))
         for i in range(7):
             section = self.text_sections[i]
-            dol_file.write_int_at_offset(TextSectionStartOffset + (i * 4), section.offset)
-            dol_file.write_int_at_offset(TextAddressStartOffset + (i * 4), section.load_address)
+            dol_file.write_int_at_offset(
+                TextSectionStartOffset + (i * 4), section.offset
+            )
+            dol_file.write_int_at_offset(
+                TextAddressStartOffset + (i * 4), section.load_address
+            )
             dol_file.write_int_at_offset(TextSizeStartOffset + (i * 4), section.size)
             dol_file.write_bytes_at_offset(section.offset, section.contents)
 
         for i in range(11):
             section = self.data_sections[i]
-            dol_file.write_int_at_offset(DataSectionStartOffset + (i * 4), section.offset)
-            dol_file.write_int_at_offset(DataAddressStartOffset + (i * 4), section.load_address)
+            dol_file.write_int_at_offset(
+                DataSectionStartOffset + (i * 4), section.offset
+            )
+            dol_file.write_int_at_offset(
+                DataAddressStartOffset + (i * 4), section.load_address
+            )
             dol_file.write_int_at_offset(DataSizeStartOffset + (i * 4), section.size)
             dol_file.write_bytes_at_offset(section.offset, section.contents)
 
@@ -123,7 +134,7 @@ class DOL(SerializableFile, EncodableFile):
         dol_file.write_int_at_offset(BSSSizeOffset, self.bss_size)
         dol_file.write_int_at_offset(EntryPointOffset, self.entry_point)
 
-        return dol_file
+        return dol_file.stream
 
     def _adjust_layout(self):
         """

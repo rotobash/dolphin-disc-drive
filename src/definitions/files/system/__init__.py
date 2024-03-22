@@ -1,4 +1,3 @@
-from .fst import *
 from .dol import *
 from .toc import *
 from .disc_header import DiscHeader

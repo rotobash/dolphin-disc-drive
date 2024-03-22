@@ -1,4 +1,4 @@
-from .. import SerializableFile, EncodableFile, Stream
+from ... import AbstractFile, Stream
 
 GamecodeOffset = 0x0001
 CountyCodeOffset = 0x0003
@@ -12,11 +12,9 @@ SizeOfFSTOffset = 0x0428
 MaxSizeOfFSTOffset = 0x042C
 
 
-class DiscHeader(SerializableFile, EncodableFile):
-    def __init__(
-        self, app_header: Stream
-    ) -> None:
-        self.disc_header = app_header
+class DiscHeader(AbstractFile):
+    def __init__(self, app_header: Stream) -> None:
+        super().__init__("boot.bin", app_header)
         self.game_code = app_header.get_bytes_at_offset(GamecodeOffset, 2)
         self.country_code = app_header.get_byte_at_offset(CountyCodeOffset)
         self.maker_id = app_header.get_bytes_at_offset(MakerOffset, 2)
@@ -42,6 +40,3 @@ class DiscHeader(SerializableFile, EncodableFile):
             "fst_size": self.fst_size,
             "fst_max_size": self.fst_max_size,
         }
-
-    def to_bytes(self) -> bytearray:
-        return self.disc_header

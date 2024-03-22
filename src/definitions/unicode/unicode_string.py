@@ -4,10 +4,13 @@ class UnicodeCharacter:
 
 
 class UnicodeString:
-    def __init__(self, initial_string: str = None) -> None:
+    def __init__(self, initial_string: "UnicodeString | str" = None) -> None:
         self.chars: "list[UnicodeCharacter]" = []
         if initial_string is not None:
-            self.chars = [c.encode('unicode') for c in initial_string]
+            if isinstance(initial_string, UnicodeString):
+                self.chars = [c for c in initial_string.chars]
+            else:
+                self.chars = [c.encode("unicode") for c in initial_string]
 
     def add_character(self, char: UnicodeCharacter):
         self.chars.append(char)
@@ -21,3 +24,6 @@ class UnicodeString:
             except UnicodeDecodeError:
                 chars.append(byte.hex())
         return "".join(chars)
+
+    def to_bytes(self):
+        return bytearray([c.char_byte for c in self.chars] + [0])

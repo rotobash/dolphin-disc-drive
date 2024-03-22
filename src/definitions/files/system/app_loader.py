@@ -1,11 +1,6 @@
-from ..serializable_file import (
-    EncodableFile,
-)
+from ... import MemoryStream, AbstractFile
 
 
-class AppLoader(EncodableFile):
-    def __init__(self, app_loader: bytearray) -> None:
-        self.app_loader = app_loader
-
-    def to_bytes(self) -> bytearray:
-        return self.app_loader
+class AppLoader(AbstractFile):
+    def __init__(self, app_loader: MemoryStream) -> None:
+        super().__init__("appldr.bin", app_loader)

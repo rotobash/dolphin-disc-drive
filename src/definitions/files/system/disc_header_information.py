@@ -1,11 +1,6 @@
-from ..serializable_file import (
-    EncodableFile,
-)
+from ... import MemoryStream, AbstractFile
 
 
-class DiscHeaderInformation(EncodableFile):
-    def __init__(self, bi2_bin: bytearray) -> None:
-        self.bi2_bin = bi2_bin
-
-    def to_bytes(self) -> bytearray:
-        return self.bi2_bin
+class DiscHeaderInformation(AbstractFile):
+    def __init__(self, bi2_bin: MemoryStream) -> None:
+        super().__init__("bi2.bin", bi2_bin)
