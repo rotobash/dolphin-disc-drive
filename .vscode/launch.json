@@ -4,19 +4,50 @@
   // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
   "version": "0.2.0",
   "configurations": [
+
     {
       "name": "Python: Module",
-      "type": "python",
+      "type": "debugpy",
       "request": "launch",
       "module": "src",
-      "justMyCode": true
+      "justMyCode": true,
+      "args": [
+        "${input:in_path}", 
+        "${input:action}", 
+        "--defragment", 
+        "-o", 
+        "${input:out_path}",
+      ],
     },
     {
       "name": "Python: Run Tests",
-      "type": "python",
+      "type": "debugpy",
       "request": "launch",
       "module": "tests",
       "justMyCode": true
-    }
+    },
+    
+  ],
+
+  "inputs": [
+    {
+      "type": "promptString",
+      "id": "in_path",
+      "description": "Path to input image."
+    },
+    {
+      "type": "promptString",
+      "id": "out_path",
+      "description": "Path to save output image."
+    },
+    {
+      "type": "pickString",
+      "id": "action",
+      "description": "",
+      "options": [
+        "save",
+        "extract"
+      ]
+    },
   ]
 }

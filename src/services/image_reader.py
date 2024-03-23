@@ -1,4 +1,4 @@
-from mmap import mmap, ACCESS_READ
+from mmap import ACCESS_WRITE, mmap, ACCESS_READ
 from pathlib import Path
 from tqdm import tqdm
 
@@ -106,7 +106,8 @@ class GamecubeImageReader:
     def get_image_size(self):
         fst_list = self.table_of_contents.get_fst_file_list()
         fst_list.sort(key=lambda f: f.data_offset)
-        return fst_list[-1].data_offset + fst_list[-1].data_size
+        file_size = fst_list[-1].data_offset + fst_list[-1].data_size
+        return file_size + Stream.align_bytes(file_size)
 
     def build_image(self, write_stream: Stream):
 
@@ -141,9 +142,6 @@ class GamecubeImageReader:
         fst_list = list(self.table_of_contents.get_fst_file_list())
         fst_list.sort(key=lambda fst: fst.data_offset)
 
-        # make space for the files
-        total_file_size = sum([f.data_size for f in fst_list])
-
         print("Serializing game files")
         for child in tqdm(fst_list):
             if isinstance(child, FSTFile):
@@ -156,3 +154,17 @@ class GamecubeImageReader:
                 write_stream.write_bytes_at_offset(
                     child.data_offset, file_contents.to_bytes()
                 )
+
+    def save_to_disk(self, path):
+        with Path(path).open("wb+") as image_file:
+            # allocate space
+            buffer = bytes([0] * 2048)
+            file_size = self.get_image_size()
+            for i in range((file_size // 2048) + 1):
+                image_file.write(buffer)
+
+            with mmap(image_file.fileno(), 0, access=ACCESS_WRITE) as mmap_stream:
+                output_stream = MMapStream(mmap_stream)
+                self.build_image(output_stream)
+
+            
