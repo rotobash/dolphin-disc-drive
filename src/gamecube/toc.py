@@ -13,8 +13,9 @@ from ..unicode import UnicodeString
 
 
 class TableOfContents(AbstractFile):
-    TOCNumberEntriesOffset = 0x8
-    TOCEntrySize = 0xC
+    TOC_NUMBER_OF_ENTRIES_OFFSET = 0x8
+    TOC_ENTRY_SIZE = 0xC
+    GC_ISO_MAX_SIZE = 1459978240
 
     def __init__(self, fst_bin: Stream):
         """
@@ -26,9 +27,9 @@ class TableOfContents(AbstractFile):
         Both will have a name and a unique index.
         """
         super().__init__("fst.bin", fst_bin)
-        number_of_entries = fst_bin.get_int_at_offset(self.TOCNumberEntriesOffset)
+        number_of_entries = fst_bin.get_int_at_offset(self.TOC_NUMBER_OF_ENTRIES_OFFSET)
         self.root_directory = FSTRootDirectory(number_of_entries)
-        self.string_table_offset = self.root_directory.next_offset * self.TOCEntrySize
+        self.string_table_offset = self.root_directory.next_offset * self.TOC_ENTRY_SIZE
         self.file_size = fst_bin.stream_size
         self._made_space = False
 
@@ -41,7 +42,7 @@ class TableOfContents(AbstractFile):
         """
         index = start_index
         while index < root.next_offset:
-            entry_offset = index * self.TOCEntrySize
+            entry_offset = index * self.TOC_ENTRY_SIZE
             is_directory = fst_bin.get_byte_at_offset(entry_offset) != 0
 
             name_offset = fst_bin.get_int_at_offset(entry_offset) & 0x00FFFFFF
@@ -121,29 +122,85 @@ class TableOfContents(AbstractFile):
         if parent_directory is None:
             parent_directory = self.root_directory
 
-        # overrun_bytes = file_size + self.total_image_size - 0x33333333333
+        # overrun_bytes = file_size + self.get_game_file_size() - self.GC_ISO_MAX_SIZE
         # if overrun_bytes > 0:
         #     print("WARNING: This file will make the image bigger than a standard ISO. This *may* work in an emulator but is likely to cause a crash.")
         #     print("Either remove the file, compress the file, or reduce the quality until it'll fit.")
         #     print(f"File overran by {overrun_bytes} bytes")
 
+        fst_list = self.get_fst_file_list()
+        fst_list.sort(key=lambda f: f.data_offset)
+        last_fst_entry = fst_list[-1]
+
+        target_offset = -1
+        target_name_offset = -1
+        target_index = parent_directory.next_offset + 1
+
+        # look for file space at the end first, if defragmented, we will surely find space
+        if last_fst_entry.data_offset + last_fst_entry.data_size < self.GC_ISO_MAX_SIZE:
+            target_offset = last_fst_entry.data_offset + last_fst_entry.data_size
+
+        # no space found, look for gaps between files
+        if target_offset < 0:
+            for i in range(len(fst_list) - 1):
+                curr_file = fst_list[i]
+                next_file = fst_list[i + 1]
+                gap = curr_file.data_offset + curr_file.data_size - next_file.data_offset
+                if gap > file_size:
+                    target_offset = curr_file.data_offset + curr_file.data_size
+                    break
+
+        if target_offset < 0:
+            print("No space found, could not add file to image.")
+            return
+        
+        fst_list.sort(key=lambda f: f.name_offset)
+        last_fst_entry = fst_list[-1]
+        target_name_offset = last_fst_entry.name_offset + len(last_fst_entry.filename.to_bytes())
+                
+        fst_entry = FSTFile(target_index, target_name_offset, target_offset, file_size)
+        fst_entry.filename = filename
+
         fst_list = self.get_fst_list()
-        # for entry in fst_list:
-        #     if
+        fst_list.sort(key=lambda f: f.file_entry)
+        for i in range(target_index, len(fst_list)):
+            entry = fst_list[i]
+            entry.file_entry += 1
+            if isinstance(entry, FSTDirectory):
+                entry.next_offset += 1
 
-        # fst_entry = FSTFile(, last_entry., file_size)
+        parent_directory.next_offset += 1
+        if parent_directory.file_entry != 0:
+            self.root_directory.next_offset += 1
 
-        self.update_fst_offsets()
+        parent_directory.add_child(fst_entry)
 
     def remove_file(self, fst_entry: FSTEntry):
-        self.update_fst_offsets()
+        fst_list = self.get_fst_list()
+        fst_list.sort(key=lambda f: f.file_entry)
+        for i in range(fst_entry.file_entry, len(fst_list)):
+            entry = fst_list[i]
+            entry.file_entry -= 1
+            if isinstance(entry, FSTDirectory):
+                entry.next_offset -= 1
+
+        parent_directory = self.root_directory
+        for f in fst_list:
+            if isinstance(f, FSTDirectory) and f.file_entry > 0 and f.file_entry < fst_entry.file_entry and f.next_offset > fst_entry.file_entry:
+                parent_directory = f
+                break
+
+        parent_directory.next_offset -= 1
+        if parent_directory.file_entry != 0:
+            self.root_directory.next_offset -= 1
+
 
     def update_fst_offsets(self):
         """
         Traverse the FST file list and fix any overlapping data offsets detected.
         """
         fst_list = self.get_fst_list()
-        self.string_table_offset = len(self.root_directory) * self.TOCEntrySize
+        self.string_table_offset = len(self.root_directory) * self.TOC_ENTRY_SIZE
 
         fst_list: "list[FSTFile]" = list(self.get_fst_file_list())
         fst_list.sort(key=lambda fst: fst.data_offset)
@@ -219,7 +276,7 @@ class TableOfContents(AbstractFile):
         for entry in fst_list:
             entry_bytes = entry.to_bytes()
             fst_bin.insert_into_stream(current_offset, entry_bytes)
-            current_offset += self.TOCEntrySize
+            current_offset += self.TOC_ENTRY_SIZE
 
         for entry in fst_list:
             if isinstance(entry, FSTRootDirectory):

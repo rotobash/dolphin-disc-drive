@@ -1,6 +1,6 @@
 import unittest
 from typing_extensions import Literal
-from src.definitions.gamecube import DOL, DOLSection
+from src.gamecube import DOL, DOLSection
 from src.definitions import MemoryStream
 from .constants import PATH_TO_TEST_SYSTEM_FILES
 

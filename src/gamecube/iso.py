@@ -1,5 +1,6 @@
-from mmap import ACCESS_WRITE, mmap
+from mmap import ACCESS_READ, ACCESS_WRITE, mmap
 from pathlib import Path
+from typing_extensions import Self
 
 from src.definitions.stream import MMapStream
 from . import GamecubeFileFactory, DiscHeader, DiscHeaderInformation, DOL, AppLoader, TableOfContents, FSTFile
@@ -92,11 +93,12 @@ class GamecubeISO(AbstractFileArchive):
         )
         super().add_new_file(file, parent_directory)
 
-    def replace_file(self, file):
-        pass
+    def replace_file(self, file: AbstractFile):
+        super().replace_file(file)
 
-    def delete_file(self):
-        pass
+    def delete_file(self, file: AbstractFile):
+        self.table_of_contents.remove_file(file)
+        super().delete_file(file)
 
     def get_system_size(self):
         image_size = 0
@@ -185,3 +187,9 @@ class GamecubeISO(AbstractFileArchive):
             with mmap(image_file.fileno(), 0, access=ACCESS_WRITE) as mmap_stream:
                 output_stream = MMapStream(mmap_stream)
                 self.build_archive(output_stream)
+
+    @staticmethod
+    def open_image_file(path: "Path | str") -> Self:
+        with path.open("rb") as in_file:
+            mmap_stream = mmap(in_file.fileno(), 0, access=ACCESS_READ)
+            return GamecubeISO(path.name, MMapStream(mmap_stream))

@@ -2,7 +2,7 @@ import abc
 
 from mmap import mmap
 from typing_extensions import Self
-from .unicode import UnicodeString, UnicodeCharacter
+from ..unicode import UnicodeString, UnicodeCharacter
 
 
 class Stream(abc.ABC):

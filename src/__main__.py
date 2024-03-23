@@ -4,8 +4,7 @@ from mmap import ACCESS_READ, mmap
 from pathlib import Path
 
 from tqdm import tqdm
-from src.definitions import MMapStream, AbstractFileArchive
-from src.definitions.gamecube import GamecubeISO
+from . import GamecubeISO, MMapStream, AbstractFileArchive
 
 def cmdline_args():
         # Make parser object
@@ -28,30 +27,25 @@ def cmdline_args():
 
 
 
-async def extract_file(output: Path, filename: str, image_reader: AbstractFileArchive):
-    file = image_reader._extract_file(filename)
-    with output.joinpath(file.file_name).open('wb') as outfile:
-        outfile.write(file.to_bytes())
-
-async def extract_files(args):
+async def extract_files(out_path: Path, ir: GamecubeISO):
     fst_file_list = ir.table_of_contents.get_fst_file_list()
     for file in tqdm(fst_file_list):
-        await extract_file(args.output, file, ir)
+        file = ir._extract_file(str(file.filename))
+        with out_path.joinpath(file.file_name).open('wb') as outfile:
+            outfile.write(file.to_bytes())
 
 if __name__ == "__main__":
     args = cmdline_args()
     in_path = Path(args.input_image_path)
     out_path = Path(args.output)
-    with in_path.open("rb") as in_file:
-        mmap_stream = mmap(in_file.fileno(), 0, access=ACCESS_READ)
-        ir = GamecubeISO(in_path.name, MMapStream(mmap_stream))
+    ir = GamecubeISO.open_image_file(in_path)
 
     if args.defragment:
         system_file_size = ir.get_system_size()
         ir.table_of_contents.defragment(system_file_size)
 
     if args.action == 'extract':
-        asyncio.run(extract_files(args))
+        asyncio.run(extract_files(out_path, ir))
             
     elif args.action == 'save':
         ir.save_to_disk(out_path)
