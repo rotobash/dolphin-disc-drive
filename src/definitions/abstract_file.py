@@ -1,15 +1,14 @@
 import abc
 from enum import Enum
 import json
-from pathlib import Path
 from typing import Iterable, Union
 
-from . import Serializable, Stream, MemoryStream
+from . import Serializable, Stream
 
 
 class FileChangeType(Enum):
-    REPLACE = (0,)
-    INSERT = (1,)
+    REPLACE = 0
+    INSERT = 1
     DELETE = 2
 
 
@@ -41,12 +40,12 @@ class AbstractFile(Serializable, abc.ABC):
         self.file_name = file_name
         self.compression_method = compression_method
         self.encryption_method = encryption_method
-        self.byte_stream: Stream = file_contents
+        self.file_contents: Stream = file_contents
 
         self.changes: list[FileChange] = []
 
     def read_bytes(self, offset: int, count: int) -> bytearray:
-        return self.byte_stream.get_bytes_at_offset(offset, count)
+        return self.file_contents.get_bytes_at_offset(offset, count)
 
     def replace_bytes(self, offset: int, value: bytearray):
         self.changes.append(FileChange(FileChangeType.REPLACE, offset, value))
@@ -65,7 +64,7 @@ class AbstractFile(Serializable, abc.ABC):
         Serialize this file into bytes.
         If we have pending changes, return a new stream copy with the changes applied.
         """
-        byte_stream = self.byte_stream.copy()
+        byte_stream = self.file_contents.copy()
         if len(self.changes) > 0:
             for change in self.changes:
                 if change.change_type == FileChangeType.INSERT:
