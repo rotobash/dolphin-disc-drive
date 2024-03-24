@@ -5,11 +5,8 @@ from typing_extensions import Self
 from zipfile import ZipFile
 from io import BytesIO
 
-from src.definitions.abstract_file import NotImplementedFile
-from src.definitions.constants import SYSTEM_CODES
-from src.definitions.stream import MMapStream
-from . import GamecubeFileFactory, DiscHeader, DiscHeaderInformation, DOL, AppLoader, TableOfContents, FSTFile
-from .. import AbstractFileArchive, AbstractFile, Stream, MemoryStream
+from . import GamecubeFileFactory, DiscHeader, DiscHeaderInformation, DOL, AppLoader, TableOfContents, FSTFile, SYSTEM_CODES
+from .. import AbstractFileArchive, AbstractFile, NotImplementedFile, Stream, MemoryStream, MMapStream
 from tqdm import tqdm
 
 
