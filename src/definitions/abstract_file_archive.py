@@ -1,15 +1,13 @@
 import abc
-from enum import Enum
+import bsdiff4
 import json
-from pathlib import Path
-from typing import Iterable, Union
 
-from src.definitions.stream import Stream
+from src.definitions.stream import MemoryStream, Stream
 
 from . import AbstractFile
 
 
-class AbstractFileArchive(abc.ABC):
+class AbstractFileArchive(AbstractFile, abc.ABC):
     """
     Abstract class for reading files that are composed of other files (an archive).
 
@@ -71,6 +69,18 @@ class AbstractFileArchive(abc.ABC):
         file_list = self.get_file_list()
         self.extracted_archive_files = dict(*[(f, self._extract_file(f)) for f in file_list])
         return self.extracted_archive_files
+    
+    def build_patch_file(self) -> bytes:
+        if any(self.extracted_archive_files):
+            for file in self.extracted_archive_files.values():
+                if any(file.changes):
+                    mem_stream = MemoryStream()
+                    self.build_archive(mem_stream)
+                    return bsdiff4.diff(self.file_contents, mem_stream.stream)
+        return bytes()
+    
+    def to_bytes(self) -> bytearray:
+        raise NotImplementedError("Use build_archive instead")
 
     def to_json_obj(self) -> dict:
         """

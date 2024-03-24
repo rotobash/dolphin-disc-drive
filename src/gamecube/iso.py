@@ -1,7 +1,12 @@
+import bsdiff4
 from mmap import ACCESS_READ, ACCESS_WRITE, mmap
 from pathlib import Path
 from typing_extensions import Self
+from zipfile import ZipFile
+from io import BytesIO
 
+from src.definitions.abstract_file import NotImplementedFile
+from src.definitions.constants import SYSTEM_CODES
 from src.definitions.stream import MMapStream
 from . import GamecubeFileFactory, DiscHeader, DiscHeaderInformation, DOL, AppLoader, TableOfContents, FSTFile
 from .. import AbstractFileArchive, AbstractFile, Stream, MemoryStream
@@ -19,31 +24,33 @@ class GamecubeISO(AbstractFileArchive):
     def __init__(self, filename: str, file_contents: Stream):
 
         super().__init__(filename, file_contents)
+        self.load_system_header(file_contents)
 
-        disc_header = self.file_contents.get_bytes_at_offset(0, self.DiscHeaderSize)
+    def load_system_header(self, header_contents: Stream):
+        disc_header = header_contents.get_bytes_at_offset(0, self.DiscHeaderSize)
         self.disc_header = DiscHeader(MemoryStream(disc_header))
 
-        disc_header_information = self.file_contents.get_bytes_at_offset(
+        disc_header_information = header_contents.get_bytes_at_offset(
             self.DiscHeaderSize, self.DiscHeaderInformationSize
         )
         self.disc_header_information = DiscHeaderInformation(
             MemoryStream(disc_header_information)
         )
 
-        app_loader = self.file_contents.get_bytes_at_offset(
+        app_loader = header_contents.get_bytes_at_offset(
             self.AppLoaderStartOffset,
             self.disc_header.fst_offset - self.AppLoaderStartOffset,
         )
         self.app_loader = AppLoader(MemoryStream(app_loader))
 
-        fst_bin = self.file_contents.get_bytes_at_offset(
+        fst_bin = header_contents.get_bytes_at_offset(
             self.disc_header.fst_offset, self.disc_header.fst_size
         )
         self.table_of_contents = TableOfContents(MemoryStream(fst_bin))
 
-        dol_header = self.file_contents.get_bytes_at_offset(self.disc_header.dol_offset, 0xFF)
+        dol_header = header_contents.get_bytes_at_offset(self.disc_header.dol_offset, 0xFF)
         self.dol = DOL(MemoryStream(dol_header))
-        dol_payload = self.file_contents.get_bytes_at_offset(
+        dol_payload = header_contents.get_bytes_at_offset(
             self.disc_header.dol_offset, self.dol.get_dol_size()
         )
         self.dol.load_section_contents(MemoryStream(dol_payload))
@@ -65,13 +72,17 @@ class GamecubeISO(AbstractFileArchive):
         return extracted_file
 
     def _extract_file(self, filename: str) -> AbstractFile:
+        if filename == "system.bin":
+            header_file = MemoryStream()
+            self.write_system_files(header_file)
+            return NotImplementedFile(filename, header_file)
         file = self.table_of_contents.search_file_by_name(filename)
         return self._extract_file_by_entry(file)
     
     
     def extract_files(self) -> "dict[str, AbstractFile]":
         files = self.table_of_contents.get_fst_file_list()
-        return dict(*[(f.filename, f) for f in files])
+        return dict(*[(f.filename, self._extract_file_by_entry(f)) for f in files])
 
 
     def add_new_file(self, file: AbstractFile, parent_directory: str = None):
@@ -94,7 +105,14 @@ class GamecubeISO(AbstractFileArchive):
         super().add_new_file(file, parent_directory)
 
     def replace_file(self, file: AbstractFile):
-        super().replace_file(file)
+        if file.file_name == "system.bin":
+            self.load_system_header(file.file_contents)
+        else:            
+            existing_fst = self.table_of_contents.search_file_by_name(file.file_name)
+            if existing_fst is not None:
+                existing_fst.data_size = file.file_contents.stream_size
+                self.table_of_contents.update_fst_offsets()
+                super().replace_file(file)
 
     def delete_file(self, file: AbstractFile):
         self.table_of_contents.remove_file(file)
@@ -114,13 +132,8 @@ class GamecubeISO(AbstractFileArchive):
         fst_list.sort(key=lambda f: f.data_offset)
         file_size = fst_list[-1].data_offset + fst_list[-1].data_size
         return file_size + Stream.align_bytes(file_size)
-
-    def build_archive(self, write_stream: Stream):
-        fst_list = self.table_of_contents.get_fst_file_list()
-        fst_list.sort(key=lambda fst: fst.data_offset)
-
-        # write system files
-        print("Serializing system files")
+    
+    def write_system_files(self, write_stream: Stream):
         with tqdm(total=5) as pbar:
             disc_header_bytes = self.disc_header.to_bytes()
             write_stream.write_bytes_at_offset(0, disc_header_bytes)
@@ -142,6 +155,14 @@ class GamecubeISO(AbstractFileArchive):
             write_stream.write_bytes_at_offset(self.disc_header.dol_offset, dol_bytes)
             pbar.update(1)
 
+
+    def build_archive(self, write_stream: Stream):
+        fst_list = self.table_of_contents.get_fst_file_list()
+        fst_list.sort(key=lambda fst: fst.data_offset)
+
+        # write system files
+        print("Serializing system files")
+        self.write_system_files(write_stream)
 
         print("Scanning extracted files for changes.")
         changed_size = False
@@ -187,6 +208,43 @@ class GamecubeISO(AbstractFileArchive):
             with mmap(image_file.fileno(), 0, access=ACCESS_WRITE) as mmap_stream:
                 output_stream = MMapStream(mmap_stream)
                 self.build_archive(output_stream)
+
+    def build_patch_file(self) -> "dict[str, bytes]":
+        zipfile = BytesIO()
+        with ZipFile(zipfile, 'w') as out_file:
+            out_file.writestr("SYSCODE", [SYSTEM_CODES["gamecube"]])
+            for file_name, file in self.extracted_archive_files.items():
+                patch_file = file.build_patch_file()
+                if patch_file is not None:
+                    out_file.writestr(f"{file_name}.patch", patch_file)
+
+            new_header_file = MemoryStream()
+            self.write_system_files(new_header_file)
+
+            old_header_file = MemoryStream()
+            disc_header_bytes = self.disc_header.file_contents
+            old_header_file.write_bytes_at_offset(0, disc_header_bytes)
+
+            disc_header_info_bytes = self.disc_header_information.file_contents
+            old_header_file.write_bytes_at_offset(
+                len(disc_header_bytes), disc_header_info_bytes
+            )
+
+            app_loader_bytes = self.app_loader.file_contents
+            old_header_file.write_bytes_at_offset(
+                self.AppLoaderStartOffset, app_loader_bytes
+            )
+
+            dol_bytes = self.dol.file_contents
+            old_header_file.write_bytes_at_offset(
+                self.disc_header.dol_offset, dol_bytes
+            )
+
+            patch_header = bsdiff4.diff(old_header_file, new_header_file)
+            out_file.writestr("system.bin.patch", patch_header)
+
+
+        return zipfile.getvalue()
 
     @staticmethod
     def open_image_file(path: "Path | str") -> Self:

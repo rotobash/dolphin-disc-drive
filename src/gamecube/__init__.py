@@ -27,4 +27,10 @@ class GamecubeFileFactory:
 GamecubeFileFactory.register_file('.dol', DOL)
 GamecubeFileFactory.register_file('.rel', REL)
 
+REGION = {
+    0x45: "US",
+    0x50: "EU",
+    0x4A: "JP",
+}
+
 from .iso import *

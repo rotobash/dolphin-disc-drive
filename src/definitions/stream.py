@@ -1,6 +1,7 @@
 import abc
 
-from mmap import mmap
+from mmap import ACCESS_WRITE, mmap
+from pathlib import Path
 from typing_extensions import Self
 from ..unicode import UnicodeString, UnicodeCharacter
 
@@ -148,6 +149,12 @@ class MMapStream(Stream):
     def close(self):
         if self.stream is not None:
             self.stream.close()
+
+    @staticmethod
+    def from_file(path: Path): 
+        with path.open("wb+") as patched_rom_file:
+            mmap_stream = mmap(patched_rom_file.fileno(), 0, access=ACCESS_WRITE)
+            return MMapStream(mmap_stream)
 
 
 class MemoryStream(Stream):

@@ -1,6 +1,7 @@
 import abc
 from enum import Enum
 import json
+import bsdiff4
 from typing import Iterable, Union
 
 from . import Serializable, Stream
@@ -87,6 +88,11 @@ class AbstractFile(Serializable, abc.ABC):
 
     def get_file_type(self) -> str:
         return self.file_name.rsplit(".")[-1]
+    
+    def build_patch_file(self) -> bytes:
+        if any(self.changes):
+            return bsdiff4.diff(self.file_contents, self.to_bytes())
+        return None
 
 
 class NotImplementedFile(AbstractFile):
