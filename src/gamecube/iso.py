@@ -5,8 +5,8 @@ from typing_extensions import Self
 from zipfile import ZipFile
 from io import BytesIO
 
-from . import GamecubeFileFactory, DiscHeader, DiscHeaderInformation, DOL, AppLoader, TableOfContents, FSTFile, SYSTEM_CODES
-from .. import AbstractFileArchive, AbstractFile, NotImplementedFile, Stream, MemoryStream, MMapStream
+from . import GamecubeFileFactory, DiscHeader, DiscHeaderInformation, DOL, AppLoader, TableOfContents, FSTFile
+from .. import AbstractFileArchive, AbstractFile, NotImplementedFile, Stream, MemoryStream, MMapStream, SystemCodes
 from tqdm import tqdm
 
 
@@ -209,7 +209,7 @@ class GamecubeISO(AbstractFileArchive):
     def build_patch_file(self) -> "dict[str, bytes]":
         zipfile = BytesIO()
         with ZipFile(zipfile, 'w') as out_file:
-            out_file.writestr("SYSCODE", [SYSTEM_CODES["gamecube"]])
+            out_file.writestr("SYSCODE", [SystemCodes.Gamecube])
             for file_name, file in self.extracted_archive_files.items():
                 patch_file = file.build_patch_file()
                 if patch_file is not None:
