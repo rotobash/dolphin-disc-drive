@@ -1,4 +1,4 @@
-from .. import AbstractFile, Serializable, Stream, MemoryStream
+from .. import AbstractFile, Serializable, Stream, MemoryStream, FileChangeType
 
 
 class DOLSection(Serializable):
@@ -87,6 +87,7 @@ class DOL(AbstractFile):
         return size + 1
 
     def load_section_contents(self, dol_bytes: Stream):
+        self.file_contents.write_bytes_at_offset(self.file_contents.stream_size, dol_bytes.stream)
         for section in self.text_sections:
             section.load_contents(
                 dol_bytes.get_bytes_at_offset(section.offset, section.size)
@@ -133,6 +134,15 @@ class DOL(AbstractFile):
         dol_file.write_int_at_offset(BSSAddressOffset, self.bss_address)
         dol_file.write_int_at_offset(BSSSizeOffset, self.bss_size)
         dol_file.write_int_at_offset(EntryPointOffset, self.entry_point)
+
+        if len(self.changes) > 0:
+            for change in self.changes:
+                if change.change_type == FileChangeType.INSERT:
+                    dol_file.insert_into_stream(change.offset, change.value)
+                elif change.change_type == FileChangeType.REPLACE:
+                    dol_file.write_bytes_at_offset(change.offset, change.value)
+                elif change.change_type == FileChangeType.DELETE:
+                    dol_file.delete_from_stream(change.offset, change.value)
 
         return dol_file.stream
 

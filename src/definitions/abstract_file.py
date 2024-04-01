@@ -60,6 +60,17 @@ class AbstractFile(Serializable, abc.ABC):
     def undo_change(self):
         self.changes.pop()
 
+    def get_file_size(self, with_changes: bool = True):
+        stream_size = self.file_contents.stream_size
+        if with_changes:
+            for change in self.changes:
+                if change.change_type == FileChangeType.INSERT:
+                    stream_size += len(change.value)
+                elif change.change_type == FileChangeType.DELETE:
+                    stream_size -= len(change.value)
+        return stream_size
+            
+
     def to_bytes(self) -> bytearray:
         """
         Serialize this file into bytes.

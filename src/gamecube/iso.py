@@ -189,9 +189,14 @@ class GamecubeISO(AbstractFileArchive):
             file_name = str(child.filename)
             file_contents = self.extracted_archive_files[file_name] if file_name in self.extracted_archive_files else self._extract_file_by_entry(child)
 
-            write_stream.write_bytes_at_offset(
-                child.data_offset, file_contents.to_bytes()
-            )
+            if isinstance(file_contents, AbstractFileArchive):
+                file_write_stream = MemoryStream([0] * file_contents.get_file_size())
+                file_contents.build_archive(file_write_stream)
+                write_stream.write_bytes_at_offset(child.data_offset, file_write_stream.stream)
+            else:
+                write_stream.write_bytes_at_offset(
+                    child.data_offset, file_contents.to_bytes()
+                )
 
     def save_to_disk(self, path: "Path | str"):
         with Path(path).open("wb+") as image_file:

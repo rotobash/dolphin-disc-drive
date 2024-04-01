@@ -1,5 +1,5 @@
 import abc
-
+from typing import Iterable, Union, BinaryIO, ByteString
 from mmap import ACCESS_WRITE, mmap
 from pathlib import Path
 from typing_extensions import Self
@@ -8,7 +8,7 @@ from ..unicode import UnicodeString, UnicodeCharacter
 
 class Stream(abc.ABC):
     def __init__(self) -> None:
-        self.stream = None
+        self.stream: "Union[ByteString, BinaryIO]" = None
         self.stream_size = 0
 
     @abc.abstractmethod
@@ -84,18 +84,28 @@ class Stream(abc.ABC):
         self.write_bytes_at_offset(offset, string.to_bytes())
         return string
 
-    def occurrence_of_bytes(self, marker: int) -> "list[int]":
+    def occurrence_of_bytes(self, marker: "Iterable[int]", start_offset: int = 0) -> "list[int]":
+        marker_offsets = []
+        marker_match_index = 0
+        for i in range(start_offset, len(self.stream)):
+            check_byte = self.get_byte_at_offset(i)
+            if check_byte == marker[marker_match_index]:
+                marker_match_index  += 1
+            else:
+                marker_match_index = 0
+            
+            if marker_match_index == len(marker):
+                marker_offsets.append(i - (marker_match_index - 1))
+                marker_match_index = 0
+
+        return marker_offsets
+
+    def occurrence_of_int(self, marker: int, start_offset: int = 0) -> "list[int]":
         """
         Check for a specific int value anywhere in the stream.
         This returns all offsets where the marker is found.
         """
-        marker_offsets = []
-        for i in range(len(self.stream)):
-            check_bytes = self.get_int_at_offset(i)
-            if check_bytes == marker:
-                marker_offsets.append(i)
-                i += 4
-        return marker_offsets
+        return self.occurrence_of_bytes(marker.to_bytes(4, 'big'), start_offset)
 
     @staticmethod
     def align_bytes(length: int, alignment=2048) -> int:
